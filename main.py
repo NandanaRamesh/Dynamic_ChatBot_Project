@@ -23,7 +23,7 @@ def scrape_website(url):
 
 
 # This one is used to find all links on the page and scrape them, and I can keep track of the visited ones
-def scrape_multiple_pages(start_url, max_pages=5):
+def scrape_multiple_pages(start_url, max_pages=1):
     visited = set()
     to_visit = [start_url]
     content = []
@@ -76,7 +76,7 @@ def answer_question_from_website(content, question):
 
 
 if __name__ == "__main__":
-    start_url = 'https://www.upsmartsolutions.com/'
+    start_url = 'https://en.wikipedia.org/wiki/NCT_(group)'
     content = scrape_multiple_pages(start_url)
 
     if not content:

@@ -4,16 +4,16 @@ from transformers import pipeline
 from urllib.parse import urljoin
 import time
 
-
-#The main function which is used to scrape website content from the website
+# Improved web scraping with prioritized section extraction
 def scrape_website(url):
     try:
         response = requests.get(url)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
+        # Prioritize relevant sections
         main_content = []
-        for tag in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li']):
+        for tag in soup.find_all(['h1', 'h2', 'h3', 'p']):
             main_content.append(tag.get_text(separator=' ', strip=True))
 
         return ' '.join(main_content)
@@ -21,9 +21,7 @@ def scrape_website(url):
         print(f"Request failed: {e}")
         return None
 
-
-# This one is used to find all links on the page and scrape them, and I can keep track of the visited ones
-def scrape_multiple_pages(start_url, max_pages=1):
+def scrape_multiple_pages(start_url, max_pages=2):
     visited = set()
     to_visit = [start_url]
     content = []
@@ -39,7 +37,6 @@ def scrape_multiple_pages(start_url, max_pages=1):
 
         visited.add(url)
 
-        # For finding the other linked pages in the website
         try:
             response = requests.get(url)
             response.raise_for_status()
@@ -51,32 +48,38 @@ def scrape_multiple_pages(start_url, max_pages=1):
         except requests.RequestException as e:
             print(f"Failed to retrieve links from {url}: {e}")
 
-        # To avoid overwhelming the server for good practice
         time.sleep(1)
 
     return ' '.join(content)
 
+# Use a more advanced model for better accuracy
+qa_pipeline = pipeline("question-answering", model="bert-large-uncased-whole-word-masking-finetuned-squad")
 
-qa_pipeline = pipeline("question-answering", model="distilbert-base-uncased-distilled-squad")
-
-
-# Answering questions from the website content
 def answer_question_from_website(content, question):
     if content:
         try:
-            result = qa_pipeline({
-                'context': content,
-                'question': question
-            })
-            return result['answer']
+            # Chunk content if too large
+            max_chunk_size = 512  # BERT-like models usually have a max token size of 512
+            chunks = [content[i:i + max_chunk_size] for i in range(0, len(content), max_chunk_size)]
+            answers = []
+
+            for chunk in chunks:
+                result = qa_pipeline({
+                    'context': chunk,
+                    'question': question
+                })
+                answers.append((result['answer'], result['score']))
+
+            # Return the answer with the highest score
+            best_answer = max(answers, key=lambda x: x[1])[0]
+            return best_answer
         except Exception as e:
-            return f"An error occurred during the QA process....{e}"
+            return f"An error occurred during the QA process: {e}"
     else:
         return "Sorry, I couldn't retrieve the information from the website."
 
-
 if __name__ == "__main__":
-    start_url = 'https://en.wikipedia.org/wiki/NCT_(group)'
+    start_url = 'https://en.wikipedia.org/wiki/Data_science'
     content = scrape_multiple_pages(start_url)
 
     if not content:

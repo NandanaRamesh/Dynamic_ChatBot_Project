@@ -1,8 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
 from transformers import pipeline
-from urllib.parse import urljoin
-import time
 
 # Improved web scraping with prioritized section extraction
 def scrape_website(url):
@@ -21,36 +19,10 @@ def scrape_website(url):
         print(f"Request failed: {e}")
         return None
 
-def scrape_multiple_pages(start_url, max_pages=2):
-    visited = set()
-    to_visit = [start_url]
-    content = []
-
-    while to_visit and len(visited) < max_pages:
-        url = to_visit.pop(0)
-        if url in visited:
-            continue
-
-        page_content = scrape_website(url)
-        if page_content:
-            content.append(page_content)
-
-        visited.add(url)
-
-        try:
-            response = requests.get(url)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'html.parser')
-            for a_tag in soup.find_all('a', href=True):
-                link = urljoin(url, a_tag['href'])
-                if link not in visited and link.startswith(start_url):
-                    to_visit.append(link)
-        except requests.RequestException as e:
-            print(f"Failed to retrieve links from {url}: {e}")
-
-        time.sleep(1)
-
-    return ' '.join(content)
+# Only scrape the provided URL, without following links
+def scrape_single_page(start_url):
+    page_content = scrape_website(start_url)
+    return page_content if page_content else ""
 
 # Use a more advanced model for better accuracy
 qa_pipeline = pipeline("question-answering", model="bert-large-uncased-whole-word-masking-finetuned-squad")
@@ -80,7 +52,7 @@ def answer_question_from_website(content, question):
 
 if __name__ == "__main__":
     start_url = 'https://en.wikipedia.org/wiki/Data_science'
-    content = scrape_multiple_pages(start_url)
+    content = scrape_single_page(start_url)
 
     if not content:
         print("Failed to retrieve content from the website.")

@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
-from transformers import pipeline
+from transformers import pipeline, AutoModelForQuestionAnswering, AutoTokenizer
+import torch
 
 # Improved web scraping with prioritized section extraction
 def scrape_website(url):
@@ -25,9 +26,21 @@ def scrape_single_page(start_url):
     return page_content if page_content else ""
 
 # Use a more advanced model for better accuracy
-qa_pipeline = pipeline("question-answering", model="bert-large-uncased-whole-word-masking-finetuned-squad")
+def load_qa_pipeline():
+    model_name = "bert-large-uncased-whole-word-masking-finetuned-squad"
+    model = AutoModelForQuestionAnswering.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-def answer_question_from_website(content, question):
+    qa_pipeline = pipeline(
+        "question-answering",
+        model=model,
+        tokenizer=tokenizer,
+        device=0 if torch.cuda.is_available() else -1  # Use GPU if available
+    )
+
+    return qa_pipeline
+
+def answer_question_from_website(content, question, qa_pipeline):
     if content:
         try:
             # Chunk content if too large
@@ -40,7 +53,11 @@ def answer_question_from_website(content, question):
                     'context': chunk,
                     'question': question
                 })
-                answers.append((result['answer'], result['score']))
+                # Collect more context around the answer
+                start_index = max(0, result['start'] - 50)
+                end_index = min(len(chunk), result['end'] + 50)
+                detailed_answer = chunk[start_index:end_index]
+                answers.append((detailed_answer, result['score']))
 
             # Return the answer with the highest score
             best_answer = max(answers, key=lambda x: x[1])[0]
@@ -54,6 +71,8 @@ if __name__ == "__main__":
     start_url = 'https://en.wikipedia.org/wiki/Data_science'
     content = scrape_single_page(start_url)
 
+    qa_pipeline = load_qa_pipeline()
+
     if not content:
         print("Failed to retrieve content from the website.")
     else:
@@ -62,5 +81,5 @@ if __name__ == "__main__":
             if user_question.lower() == "bye":
                 print("Goodbye!")
                 break
-            answer = answer_question_from_website(content, user_question)
+            answer = answer_question_from_website(content, user_question, qa_pipeline)
             print(answer)

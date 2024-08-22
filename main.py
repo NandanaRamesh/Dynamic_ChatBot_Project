@@ -3,14 +3,13 @@ from bs4 import BeautifulSoup
 from transformers import pipeline, AutoModelForQuestionAnswering, AutoTokenizer
 import torch
 
-# Improved web scraping with prioritized section extraction
 def scrape_website(url):
     try:
         response = requests.get(url)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Prioritize relevant sections
+        # This helps to prioritize relevant sections
         main_content = []
         for tag in soup.find_all(['h1', 'h2', 'h3', 'p']):
             main_content.append(tag.get_text(separator=' ', strip=True))
@@ -20,12 +19,11 @@ def scrape_website(url):
         print(f"Request failed: {e}")
         return None
 
-# Only scrape the provided URL, without following links
+# Only scraping a single page of the provided URL, without following links
 def scrape_single_page(start_url):
     page_content = scrape_website(start_url)
     return page_content if page_content else ""
 
-# Use a more advanced model for better accuracy
 def load_qa_pipeline():
     model_name = "bert-large-uncased-whole-word-masking-finetuned-squad"
     model = AutoModelForQuestionAnswering.from_pretrained(model_name)
@@ -35,7 +33,7 @@ def load_qa_pipeline():
         "question-answering",
         model=model,
         tokenizer=tokenizer,
-        device=0 if torch.cuda.is_available() else -1  # Use GPU if available
+        device=0 if torch.cuda.is_available() else -1  # This is for using my GPU if available
     )
 
     return qa_pipeline
@@ -53,13 +51,13 @@ def answer_question_from_website(content, question, qa_pipeline):
                     'context': chunk,
                     'question': question
                 })
-                # Collect more context around the answer
+                # For cllecting  more context around the answer
                 start_index = max(0, result['start'] - 50)
                 end_index = min(len(chunk), result['end'] + 50)
                 detailed_answer = chunk[start_index:end_index]
                 answers.append((detailed_answer, result['score']))
 
-            # Return the answer with the highest score
+            # For returning the answer with the highest score
             best_answer = max(answers, key=lambda x: x[1])[0]
             return best_answer
         except Exception as e:

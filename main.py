@@ -1,7 +1,9 @@
 import requests
 from bs4 import BeautifulSoup
-from transformers import pipeline, AutoModelForQuestionAnswering, AutoTokenizer
-import torch
+
+# Your Hugging Face API key
+API_KEY = "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"
+headers = {"Authorization": f"Bearer {API_KEY}"}
 
 def scrape_website(url):
     try:
@@ -24,52 +26,24 @@ def scrape_single_page(start_url):
     page_content = scrape_website(start_url)
     return page_content if page_content else ""
 
-def load_qa_pipeline():
-    model_name = "bert-large-uncased-whole-word-masking-finetuned-squad"
-    model = AutoModelForQuestionAnswering.from_pretrained(model_name)
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+def ask_gpt_j(question, context):
+    api_url = "https://api-inference.huggingface.co/models/EleutherAI/gpt-j-6B"
+    # Combining the context and question into a single input
+    prompt = f"Context: {context}\nQuestion: {question}\nAnswer:"
+    data = {
+        "inputs": prompt,
+        "parameters": {"max_new_tokens": 150, "return_full_text": False}
+    }
 
-    qa_pipeline = pipeline(
-        "question-answering",
-        model=model,
-        tokenizer=tokenizer,
-        device=0 if torch.cuda.is_available() else -1  # This is for using my GPU if available
-    )
-
-    return qa_pipeline
-
-def answer_question_from_website(content, question, qa_pipeline):
-    if content:
-        try:
-            # Chunk content if too large
-            max_chunk_size = 512  # BERT-like models usually have a max token size of 512
-            chunks = [content[i:i + max_chunk_size] for i in range(0, len(content), max_chunk_size)]
-            answers = []
-
-            for chunk in chunks:
-                result = qa_pipeline({
-                    'context': chunk,
-                    'question': question
-                })
-                # For cllecting  more context around the answer
-                start_index = max(0, result['start'] - 50)
-                end_index = min(len(chunk), result['end'] + 50)
-                detailed_answer = chunk[start_index:end_index]
-                answers.append((detailed_answer, result['score']))
-
-            # For returning the answer with the highest score
-            best_answer = max(answers, key=lambda x: x[1])[0]
-            return best_answer
-        except Exception as e:
-            return f"An error occurred during the QA process: {e}"
+    response = requests.post(api_url, headers=headers, json=data)
+    if response.status_code == 200:
+        return response.json()[0]['generated_text']
     else:
-        return "Sorry, I couldn't retrieve the information from the website."
+        raise Exception(f"Request failed with status code {response.status_code}: {response.text}")
 
 if __name__ == "__main__":
     start_url = 'https://en.wikipedia.org/wiki/Data_science'
     content = scrape_single_page(start_url)
-
-    qa_pipeline = load_qa_pipeline()
 
     if not content:
         print("Failed to retrieve content from the website.")
@@ -79,5 +53,8 @@ if __name__ == "__main__":
             if user_question.lower() == "bye":
                 print("Goodbye!")
                 break
-            answer = answer_question_from_website(content, user_question, qa_pipeline)
-            print(answer)
+            try:
+                answer = ask_gpt_j(user_question, content)
+                print(answer)
+            except Exception as e:
+                print(f"An error occurred: {e}")
